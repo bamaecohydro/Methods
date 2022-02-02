@@ -1,0 +1,289 @@
+---
+title: "Functional Programming"
+author: "Nate Jones"
+date: "02/2/2022"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.0 Functional Programming Overview
+
+Functional programming is a style of programming that allows users to both create their own functions and execute those functions. Before the tidyverse take over of R, this was (and honestly still is) a way to improve the efficiency of your code. For more information, click [here](https://towardsdatascience.com/cleaner-r-code-with-functional-programming-adc37931ef7a).
+
+For me (and for many others), I learned functional programming out of necessity! I was writing for loops that were both slow and that were taking up too much RAM.  Thus, I started creating functions to take advantage of parrallel processing, and the rest is history. 
+
+Below, you will find a brief tutorial on writing functions, a fun #dadjoke snippet, and finally a list of best practices. 
+
+# 2.0 Tutorial
+## 2.1 Workflow: Estimating annual runoff
+In the past few years, I've been part of several studies using USGS gages examining [river-floodplain connectivity](https://doi.org/10.1038/s41467-019-13184-4), [drying regimes of non-perinial streams](https://doi.org/10.1029/2021GL093298), and [changes in those drying regimes](https://doi.org/10.1088/1748-9326/ac14ec). To mirror those analyses, lets create a function to download USGS stream gage and estimate annual runoff. (Note, check out [this tutorial on the dataRetrieval package](https://waterdata.usgs.gov/blog/dataretrieval/) for more information on downloading USGS gage data!)   
+
+Below is a workflow we could use to estimate annual runoff for one gage:
+
+```{r, message= FALSE, warning = FALSE}
+#Load libraries of interest
+library(dataRetrieval)
+library(tidyverse)
+library(lubridate)
+
+#Define gage number of interest
+gage<-'02446500'
+
+#download flow data (cfs)
+df<-readNWISdv(
+  siteNumbers = gage, 
+  parameterCd = '00060'
+)
+
+#Download watershed area (mi^2)
+ws_area<-readNWISsite(siteNumbers = gage) %>% select(drain_area_va) %>% pull()
+
+#Tidy data frame and estimate annual runoff
+df<-df %>% 
+  #convert to tibble
+  as_tibble %>% 
+  #Select and rename cols of interest
+  select(
+    date = Date, 
+    Q_cfs=X_00060_00003) %>% 
+  #convert date col to lubridate format
+  mutate(date=ymd(date)) %>% 
+  #Estimate daily runoff depth
+  mutate(q_in_day = Q_cfs/ws_area/(5280^2)*(12)*86400) %>% 
+  #Summarise runoff by year
+  mutate(year = year(date)) %>% 
+  group_by(year) %>% 
+  summarise(
+    q_in = sum(q_in_day, na.rm=T), 
+    n = n()) %>% 
+  #filter years with less than 350 days of data
+  filter(n>350) %>% 
+  select(-n)
+  
+```
+
+
+
+```{r , echo=FALSE, fig.height= 4, fig.width= 6, fig.align='center'}
+df %>% 
+  #Start ggplot object
+  ggplot(aes(x=year, y=q_in)) + 
+    #Add line data
+    geom_point(pch=19, col="steelblue", alpha=0.5, cex=3) +
+    #Plot y-axis in log scale
+    #Add predefined black/white theme
+    theme_bw() +
+    #Change font size of axes
+    theme(
+      axis.title.y = element_text(size = 14), 
+      axis.text.y  = element_text(size = 10)
+    ) + 
+    #Add labels
+    xlab("Year") + 
+    ylab("Runoff [in/yr]") 
+```
+
+## 2.2 Creating a function
+Now, we want to run this for several gages! You have a few different options: (i) hire an army of undergrads, (ii) start copy/paste, (iii) create a function! Let's try the latter. 
+
+Notably, use the following notation to create a function in R: 
+
+```{r eval=FALSE}
+name<-function(variable){
+  CODE
+}
+```
+
+where name is the name of the function, variable is the variable you use to run the function, and CODE is the code you want to apply to the variable in question. 
+
+Below is the workflow above in functional form: 
+```{r , message= FALSE, warning = FALSE, results='hide'}
+#Create function to estimate average annual runoff
+fun<-function(gage){
+  #Load libraries of interest
+  library(dataRetrieval)
+  library(tidyverse)
+  library(lubridate)
+  
+  #download flow data (cfs)
+  df<-readNWISdv(
+    siteNumbers = gage, 
+    parameterCd = '00060'
+  )
+  
+  #Download watershed area (mi^2)
+  ws_area<-readNWISsite(siteNumbers = gage) %>% select(drain_area_va) %>% pull()
+  
+  #Tidy data frame and estimate annual runoff
+  df<-df %>% 
+    #convert to tibble
+    as_tibble %>% 
+    #Select and rename cols of interest
+    select(
+      date = Date, 
+      Q_cfs=X_00060_00003) %>% 
+    #convert date col to lubridate format
+    mutate(date=ymd(date)) %>% 
+    #Estimate daily runoff depth
+    mutate(q_in_day = Q_cfs/ws_area/(5280^2)*(12)*86400) %>% 
+    #Summarise runoff by year
+    mutate(year = year(date)) %>% 
+    group_by(year) %>% 
+    summarise(
+      q_in = sum(q_in_day, na.rm=T), 
+      n = n()
+    ) %>% 
+    #filter years with less than 350 days of data
+    filter(n>350) %>% 
+    select(-n) %>% 
+    #estimate annual runoff
+    summarise(
+      q_in = mean(q_in)
+    )
+  
+  #Prepare export
+  df<-df %>% mutate(gage = gage)
+  
+  #Export data
+  df
+}
+
+#test function
+fun('02446500')
+```
+
+Scroll down to the best practices for more information on the construction of this function. Notably, we (i) loaded our required packages within the function, (ii) kept the global and functional environments separate, and (iii) exported a single roww of data from the function. 
+
+## 2.3 Applying the function
+Now that we having a working function, how do we use it? My favorite approach is to employ the lapply() and bind_rows() functions in series. Note, its also sometimes useful to create a wrapper function so you can use a counter. This work flow could looks something like: 
+
+```{r , message= FALSE, warning = FALSE}
+#Create a list ogages (Mississippi River, Alabama River, and Potomac River gages)
+gages<- c("07374000", "02428400", "01646500")
+
+#Create wrapper function 
+wrapper_fun<-function(n){fun(gages[n])}
+
+#Now run function
+output<-lapply(
+  X=seq(1, length(gages)),
+  FUN=wrapper_fun
+)
+
+#Now, bind rows from list output
+output<-output %>% bind_rows()
+
+```
+
+## 2.4 Error Function
+OK, now that we can apply the function, its important to think about building robust code so you you can apply it to large datasets without errors. You can do this by both cleaning your input data AND using error catching function. Below is how I usually build error functions: 
+
+```{r , message= FALSE, warning = FALSE}
+#Create a list gages (Note, we Mobile River gage that does not record flow)
+gages<- c("02470630","07374000", "02428400", "01646500")
+
+#Create wrapper function 
+error_fun<-function(n){
+  tryCatch(
+    expr = fun(gages[n]), 
+    error = function(e)
+      tibble(
+        q_in=-9999,
+        gage = gages[n])
+      )
+}  
+    
+
+#Now run function
+output<-lapply(
+  X=seq(1, length(gages)),
+  FUN=error_fun
+)
+
+#Now, bind rows from list output
+output<-output %>% bind_rows()
+
+```
+
+## 2.4 Running parralell processes
+
+Now that you've got some robust code built, you can apply it to a large dataset! To do this, you may find it advantageous to send your function to multiple cores. Below we use the parallel library to estimate annual mean runoff from all the gages accross Alabama!
+
+```{r , message= FALSE, warning = FALSE, results='hide'}
+#Load the parallel package
+library(parallel)
+
+#Creat list of all gages in Alabama
+gages<- c("02339495","02342500","02342937","02342997","023432415","02361000","02361500","02362000","02362240","02363000","02364000","02364500","02369800","02371500","02372250","02372422","02372430","02373000","02374050","02374250","02374500","02374700","02374745","02374950","02375000","02377560","02377570","02377750","02378170","02378185","02378300","02378500","0237854520","02378780","02378790","02397530","02398300","02399200","02399500","02399600","02400100","02400175","02400496","02400500","02400680","02401000","02401330","02401390","02401895","02403310","02404400","02405500","02406500","02406930","02407000","02407514","02407526","02408150","02408540","02411590","02411600","02412000","02413300","02414300","02414500","02414715","02415000","02416360","02418230","02418760","02419000","02419500","02419890","02419988","02420000","02421000","02421350","02421351","02422500","02423000","02423110","02423130","02423160","02423380","02423397","02423400","02423414","02423425","02423496","02423500","0242354650","0242354750","02423555","02423571","02423586","02423630","02423647","02424000","02424590","02425000","02427250","02427505","02427506","02428400","02428401","02429540","02438000","02444160","02444161","02446500","02447025","02447026","02448500","02448900","02449838","02449882","02450180","02450250","02450825","02453000","02453500","02454000","02454055","02455000","02455185","02455980","02456000","02456500","02457595","02457704","02458148","02458190","02458300","02458450","02458502","02458600","02460500","02461130","02461192","02461405","02461500","02462000","02462500","02462501","02462951","02462952","02464000","02464800","02465000","02465005","02465292","02465493","02466030","02466031","02467000","02467001","02467500","02469500","02469525","02469761","02469762","02469800","02470050","02470072","02470629","02470630","02471001","02471019","02471078","02479500","02479945","02479980","02480002","02480020","03572110","03572690","03572900","03574100","03574500","03574768","0357479650","03574975","03575100","0357526200","03575272","0357568650","0357568980","03575700","03575830","0357586650","0357587090","0357587140","0357587400","0357587728","03575890","0357591500","03575950","03575980","03576148","03576250","03576500","03577225","03586500","03590000","03592000","03592500")
+
+#Determine number of processing cores available on your machine
+n.cores<-detectCores()-1
+
+#Create clusters
+cl<-makeCluster(n.cores)
+
+#Send libraries to cluster
+clusterEvalQ(cl, {
+  library(dataRetrieval)
+  library(tidyverse)
+  library(lubridate)
+   })
+
+#Export data to cluter environments
+clusterExport(cl, c("fun", "gages"))
+
+#Now run function
+output<-parLapply(
+  cl=cl,
+  seq(1, length(gages)),
+  error_fun)
+
+#Now, bind rows from list output
+output<-output %>% bind_rows()
+
+#Stop the clusters
+stopCluster(cl)
+
+```
+
+```{r , echo=FALSE, fig.height= 4, fig.width= 4, fig.align='center'}
+output %>% 
+  filter(q_in>0) %>% 
+  #Start ggplot object
+  ggplot(aes(x=q_in)) + 
+    #Add line data
+    geom_density(fill="steelblue", alpha=0.5) +
+    #Plot y-axis in log scale
+    #Add predefined black/white theme
+    theme_bw() +
+    #Change font size of axes
+    theme(
+      axis.title = element_text(size = 14), 
+      axis.text = element_text(size = 10)
+    ) + 
+    #Add labels
+    xlab("Runoff [in/yr]") + 
+    ylab("Density") 
+```
+
+# 3.0 Best Practices
+Here are some helpful hints I typically employ in my coding:
+
+**1. Keep your global environment and your function's environment completely separate!** Its temping to use a function that edits a data.frame or tibble in your global environmnet. However, this can lead to mass confusion, nashign of teach, and general pain and suffering. 
+
+**2. Load packages you need in your function**. Yes, you can pass packages between your global environment and your functional environment. However, if/when you graduate to parrallels, this is no longer an option. Just eat your damn veggies and do this! Its easy to just list the required packages at the start of your function!
+
+**3. Use a counter as your variable**. This is more of a suggestion. However, using a counter (i.e., similar to integers employed in for loops) can simplify your workflow both when initiating your function and joining the results after the function is complete. 
+
+**4. Export your results from function as a single row with unique ID.** Once your run your function, its important to transfer the results from functional environment to global environment. Exporting this information as a row of data with unique ID will allow you to join it to your master dataframe! 
+
+**5. Create a wrapper function to handle errors.** See the example above. Using an error function can save you a ton of frustration...especially when your using your function to complete hundreds to tens of thousands of tasks! 
+
+
