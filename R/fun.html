@@ -408,8 +408,8 @@ output&lt;-lapply(
 #Now, bind rows from list output
 output&lt;-output %&gt;% bind_rows()</code></pre>
 </div>
-<div id="parralell-processing" class="section level2">
-<h2>2.4 Parralell processing</h2>
+<div id="paralell-processing" class="section level2">
+<h2>2.4 Paralell processing</h2>
 <p>Now that you’ve got some robust code built, you can apply it to a large dataset! To do this, you may find it advantageous to send your function to multiple cores. Below we use the parallel library to estimate annual mean runoff from all the gages accross Alabama!</p>
 <pre class="r"><code>#Load the parallel package
 library(parallel)

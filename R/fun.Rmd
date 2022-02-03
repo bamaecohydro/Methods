@@ -214,7 +214,7 @@ output<-output %>% bind_rows()
 
 ```
 
-## 2.4 Parralell processing
+## 2.4 Paralell processing
 
 Now that you've got some robust code built, you can apply it to a large dataset! To do this, you may find it advantageous to send your function to multiple cores. Below we use the parallel library to estimate annual mean runoff from all the gages accross Alabama!
 
