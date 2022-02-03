@@ -470,7 +470,7 @@ Toggle answer
   }
   
   #apply function
-  output&lt;-lapply(seq(1,10), fun)</code></pre>
+  output&lt;-lapply(seq(1,10), fun) %&gt;% bind_rows()</code></pre>
 </details>
 </div>
 <div id="best-practices" class="section level1">
@@ -479,7 +479,7 @@ Toggle answer
 <p><strong>1. Keep your global environment and your function’s environment completely separate!</strong> Its temping to use a function that edits a data frame or tibble in your global environment. However, this can lead to mass confusion, gnashing of teath, and general pain and suffering. Just don’t do it.</p>
 <p><strong>2. Load packages you need in your function</strong>. Yes, you can pass packages between your global environment and your functional environment. However, if/when you graduate to parallel processing, this is no longer an option. Just eat your damn veggies and do this! Its easy to just list the required packages at the start of your function!</p>
 <p><strong>3. Use a counter as your variable</strong>. This is more of a suggestion. However, using a counter (i.e., similar to integers employed in for-loops) can simplify your workflow both when initiating your function and joining the results after the function is complete.</p>
-<p><strong>4. Export your results from function as a single row with unique ID.</strong> Once your run your function, its imperative to transfer the results from the functional environment to the global environment. Exporting this information as a row of data with unique ID will allow you to join it to your master dataframe!</p>
+<p><strong>4. Export your results from function as a single row with unique ID.</strong> Once you run your function, its imperative to transfer the results from the functional environment to the global environment. Exporting this information as a row of data with unique ID will allow you to join it to your master dataframe!</p>
 <p><strong>5. Create a wrapper function to handle errors.</strong> See the example above. Using an error function can save you a ton of frustration…especially when your using your function to complete hundreds to tens of thousands of tasks!</p>
 </div>
 

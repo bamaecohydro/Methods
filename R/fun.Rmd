@@ -297,7 +297,7 @@ Now that you can build a function -- create a tibble containing 10 'Dad' jokes u
   }
   
   #apply function
-  output<-lapply(seq(1,10), fun)
+  output<-lapply(seq(1,10), fun) %>% bind_rows()
 ```
 </details>
 
@@ -310,7 +310,7 @@ Here are some helpful hints I typically employ in my coding:
 
 **3. Use a counter as your variable**. This is more of a suggestion. However, using a counter (i.e., similar to integers employed in for-loops) can simplify your workflow both when initiating your function and joining the results after the function is complete. 
 
-**4. Export your results from function as a single row with unique ID.** Once your run your function, its imperative to transfer the results from the functional environment to the global environment. Exporting this information as a row of data with unique ID will allow you to join it to your master dataframe! 
+**4. Export your results from function as a single row with unique ID.** Once you run your function, its imperative to transfer the results from the functional environment to the global environment. Exporting this information as a row of data with unique ID will allow you to join it to your master dataframe! 
 
 **5. Create a wrapper function to handle errors.** See the example above. Using an error function can save you a ton of frustration...especially when your using your function to complete hundreds to tens of thousands of tasks! 
 
